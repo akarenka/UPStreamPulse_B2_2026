@@ -1,0 +1,15 @@
+{
+  "title": "探索獨家影音內容",
+  "subtitle": "免費會員享 15 秒試看 · 升級解鎖高清全片",
+  "description": "透過下方的「即時同步面板」，只要上傳影音至 Backblaze B2，系統將自動提取公開 Friendly URL 並加入影音大廳！",
+  "heroImage": "https://f005.backblazeb2.com/file/drama-movie/Screenshot+2026-09-04+113309.png",
+  "leftAdImage": "https://f005.backblazeb2.com/file/drama-movie/Screenshot+2026-09-02+222253.png",
+  "leftAdType": "image",
+  "leftAdLink": "",
+  "rightAdImage": "https://f005.backblazeb2.com/file/drama-movie/15.mp4",
+  "rightAdType": "video",
+  "rightAdLink": "",
+  "mobileAdImage": "https://pub-12e20a040fa54e329557e0a93196cb52.r2.dev/-P1llza1yvcI3jM3.mp4",
+  "mobileAdType": "video",
+  "mobileAdLink": ""
+}

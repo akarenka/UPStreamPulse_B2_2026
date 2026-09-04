@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function roomData(roomId) {
+      return get(/databases/$(database)/documents/liveRooms/$(roomId)).data;
+    }
+
+    function isRoomOwner(roomId) {
+      return signedIn() && roomData(roomId).ownerUid == request.auth.uid;
+    }
+
+    function isRoomAdmin(roomId) {
+      return signedIn()
+        && roomData(roomId).adminUids is list
+        && request.auth.uid in roomData(roomId).adminUids;
+    }
+
+    function isRoomManager(roomId) {
+      return isRoomOwner(roomId) || isRoomAdmin(roomId);
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if ownsUser(uid)
+        && request.resource.data.points is number
+        && request.resource.data.points == 1100;
+      allow update: if ownsUser(uid)
+        && request.resource.data.points is number
+        && request.resource.data.points >= 0
+        && ((!('points' in resource.data) && request.resource.data.points == 1100)
+          || request.resource.data.points <= resource.data.points
+          || (request.resource.data.testMode == true
+            && request.resource.data.points == 1100)
+          || (request.resource.data.testMode == true
+            && (request.resource.data.points - resource.data.points) in [100, 300, 600, 1000, 10000]));
+
+      match /following/{roomId} {
+        allow read, create, update, delete: if ownsUser(uid);
+      }
+
+      match /testPurchases/{purchaseId} {
+        allow read: if ownsUser(uid);
+        allow create: if ownsUser(uid)
+          && request.resource.data.points in [100, 300, 600, 1000, 10000]
+          && request.resource.data.usd in [2, 6, 8, 10, 20];
+      }
+    }
+
+    match /liveRooms/{roomId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && ((resource.data.ownerUid == request.auth.uid)
+          || (resource.data.adminUids is list
+            && request.auth.uid in resource.data.adminUids
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['botEnabled', 'botName', 'botMessage', 'updatedAt'])));
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /followers/{uid} {
+        allow read: if signedIn();
+        allow create, update, delete: if ownsUser(uid);
+      }
+
+      match /subscribers/{uid} {
+        allow read: if signedIn();
+        allow create, update, delete: if ownsUser(uid);
+      }
+
+      match /messages/{messageId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && !exists(/databases/$(database)/documents/liveRooms/$(roomId)/bans/$(request.auth.uid))
+          && !exists(/databases/$(database)/documents/liveRooms/$(roomId)/mutes/$(request.auth.uid));
+        allow update, delete: if isRoomManager(roomId);
+      }
+
+      match /gifts/{giftId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.type in ['points', 'subscribe']
+          && request.resource.data.points is number
+          && request.resource.data.points > 0
+          && request.resource.data.points <= 10000
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.points
+            == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.points
+              - request.resource.data.points;
+        allow update: if false;
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/liveRooms/$(roomId)).data.ownerUid == request.auth.uid;
+      }
+
+      match /rankResets/{resetId} {
+        allow read: if signedIn()
+          && get(/databases/$(database)/documents/liveRooms/$(roomId)).data.ownerUid == request.auth.uid;
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/liveRooms/$(roomId)).data.ownerUid == request.auth.uid
+          && request.resource.data.resetByUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      match /bans/{uid} {
+        allow read: if ownsUser(uid) || isRoomManager(roomId);
+        allow create, update, delete: if isRoomManager(roomId)
+          && uid != roomData(roomId).ownerUid
+          && (!(roomData(roomId).adminUids is list) || !(uid in roomData(roomId).adminUids));
+      }
+
+      match /mutes/{uid} {
+        allow read: if ownsUser(uid) || isRoomManager(roomId);
+        allow create, update, delete: if isRoomManager(roomId)
+          && uid != roomData(roomId).ownerUid
+          && (!(roomData(roomId).adminUids is list) || !(uid in roomData(roomId).adminUids));
+      }
+    }
+  }
+}

@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<!-- StreamPulse public viewer build: 2026-08-26-v12 (multi-provider-media-url) -->
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>StreamPulse 影音大廳</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        },
+                        accent: {
+                            500: '#10b981',
+                            600: '#059669',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Identity Services (GIS) 原生 SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .paywall-overlay {
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(16px);
+        }
+        #viewer-upload-cta,
+        #b2-upload-panel,
+        #tab-btn-calculator,
+        #tab-btn-dashboard {
+            display: none !important;
+        }
+        /* 視覺完全隱藏的防機器人蜜罐 */
+        .hp-bot-trap {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 0;
+            width: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+
+    <!-- 全局蜜罐欄位 (Bot 陷阱) -->
+    <div class="hp-bot-trap" aria-hidden="true">
+        <input type="text" id="hp_site_token" name="hp_site_token" tabindex="-1" autocomplete="off">
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/30 cursor-pointer" onclick="switchTab('player')">
+                    <i class="fa-solid font-bold fa-play text-lg"></i>
+                </div>
+                <div>
+                    <span class="text-xl font-bold tracking-tight text-white">StreamPulse <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30">SaaS</span></span>
+                    <p class="text-[10px] text-slate-400">觀眾影音播放與訂閱平台</p>
+                </div>
+            </div>
+
+            <!-- Nav Tabs -->
+            <nav aria-label="主要分頁" class="order-3 md:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto bg-slate-800/60 p-1 rounded-xl border border-slate-700/50 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button onclick="switchTab('player')" id="tab-btn-player" class="shrink-0 px-3.5 py-1.5 rounded-lg font-semibold transition-all text-white bg-brand-600 shadow">
+                    <i class="fa-solid fa-compact-disc mr-1.5"></i><span>影音大廳</span>
+                </button>
+                <button onclick="switchTab('pricing')" id="tab-btn-pricing" class="shrink-0 px-3.5 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-700/50">
+                    <i class="fa-solid fa-fire-flame-curved mr-1.5"></i><span>Hit list</span>
+                </button>
+            </nav>
+
+            <div class="flex items-center gap-3">
+                <button onclick="openLibraryModal()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-2 transition-all shadow-sm" title="我的影音庫">
+                    <i class="fa-solid fa-folder-heart text-pink-400"></i><span class="hidden sm:inline">我的影音庫</span>
+                </button>
+                
+                <!-- Google 原生 SDK 登入狀態 / 按鈕 -->
+                <div id="auth-container">
+                    <button id="btn-login-gmail" onclick="openModal('gmailModal')" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-2 transition-all shadow-sm">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24">
+                            <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.2 9 5 12 5z"/>
+                            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                            <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12s.7 2.3 1.9 4.7l3.7-2.9z"/>
+                            <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.2-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"/>
+                        </svg>
+                        <span>Google 登入</span>
+                    </button>
+
+                    <div id="user-profile-badge" class="hidden flex items-center gap-2">
+                        <div class="relative group cursor-pointer" onclick="toggleUserDropdown()">
+                            <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-xl px-2.5 py-1.5">
+                                <img id="user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" class="w-6 h-6 rounded-full object-cover border border-brand-400">
+                                <div class="text-left hidden sm:block">
+                                    <div id="user-email-display" class="text-[11px] font-bold text-slate-200 truncate max-w-[110px]">user@gmail.com</div>
+                                    <div id="user-status-badge" class="text-[9px] font-semibold text-amber-400 flex items-center gap-1">
+                                        <i class="fa-solid fa-lock text-[8px]"></i> <span>免費會員 (試看 15s)</span>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 ml-1"></i>
+                            </div>
+
+                            <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-48 glass-card rounded-xl shadow-2xl py-1.5 border border-slate-700 z-50 text-xs">
+                                <div class="px-3 py-2 border-b border-slate-800">
+                                    <div id="dropdown-user-name" class="font-bold text-white">Google User</div>
+                                    <div id="dropdown-user-email" class="text-[10px] text-slate-400 truncate">user@gmail.com</div>
+                                </div>
+                                <button onclick="openModal('subscriptionModal')" class="w-full text-left px-3 py-2 hover:bg-brand-600/20 text-brand-300 font-semibold flex items-center gap-2">
+                                    <i class="fa-solid fa-crown text-amber-400"></i> <span>升級解鎖完整影音</span>
+                                </button>
+                                <button onclick="togglePaidSimulate()" class="w-full text-left px-3 py-2 hover:bg-slate-800 text-slate-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> <span id="toggle-pay-text">切換為 [付費會員] 狀態</span>
+                                </button>
+                                <div class="border-t border-slate-800 my-1"></div>
+                                <button onclick="handleLogout()" class="w-full text-left px-3 py-2 hover:bg-rose-500/10 text-rose-400 font-medium flex items-center gap-2">
+                                    <i class="fa-solid fa-right-from-bracket"></i> <span>登出帳號</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- TAB 0: MEDIA PLAYER & GALLERY -->
+        <section id="tab-player" class="space-y-8">
+            <div id="promo-hero" class="relative rounded-3xl overflow-hidden glass-card p-6 sm:p-10 border border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 bg-cover bg-center">
+                <div id="promo-overlay" class="absolute inset-0 bg-slate-950/35"></div>
+                <div class="relative z-10 max-w-3xl space-y-4">
+                    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 border border-brand-500/30 text-brand-300 text-xs font-bold">
+                        <i class="fa-solid fa-shield-halved text-brand-400"></i> <span>多雲串流 · 原創版權防護</span>
+                    </span>
+                    <h1 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
+                        <span id="promo-title">探索獨家影音內容</span><br>
+                        <span id="promo-subtitle" class="gradient-text">免費會員享 15 秒試看 · 升級解鎖高清全片</span>
+                    </h1>
+                    <p id="promo-description" class="text-slate-300 text-sm">
+                        支援多雲端公開 URL 串流播放，登入 Google 帳號立即開始試看！
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-3 pt-2">
+                        <button onclick="openModal('subscriptionModal')" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-semibold text-xs flex items-center gap-2">
+                            <i class="fa-solid fa-crown"></i> <span>查看付費訂閱方案</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">熱門串流影音庫</h2>
+                    <p class="text-xs text-slate-400">點擊卡片即可播放，全站已啟用防下載與防盜保護</p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-200 text-xs font-bold"><i class="fa-solid fa-photo-film"></i>總上傳 Total <strong id="media-total-count" class="text-white">0</strong></span>
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs font-bold"><i class="fa-solid fa-video"></i>影片 Videos <strong id="media-video-count" class="text-white">0</strong></span>
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-200 text-xs font-bold"><i class="fa-solid fa-headphones"></i>音訊 Audios <strong id="media-audio-count" class="text-white">0</strong></span>
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs font-bold"><i class="fa-solid fa-filter"></i>目前顯示 Showing <strong id="media-showing-count" class="text-white">0</strong></span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i><input id="media-search" oninput="searchMedia(this.value)" placeholder="搜尋標題、創作者、頻道或分類" class="w-64 max-w-[80vw] bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white outline-none focus:ring-2 focus:ring-brand-500"></div>
+                    <input id="category-filter" oninput="filterCategory(this.value)" placeholder="輸入自訂分類篩選" class="w-44 max-w-[70vw] bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300">
+                    <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+                        <button onclick="filterMedia('all')" id="filter-all" class="px-3 py-1.5 rounded-lg bg-brand-600 text-white">全部 All</button>
+                        <button onclick="filterMedia('video')" id="filter-video" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white">影片 Video</button>
+                        <button onclick="filterMedia('audio')" id="filter-audio" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white">音訊 Audio</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Media Grid Cards -->
+            <div id="media-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
+
+        <!-- TAB 1: AUTOMATIC HIT LIST -->
+        <section id="tab-pricing" class="hidden space-y-12 transition-opacity duration-300">
+            <div class="space-y-8">
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                    <div>
+                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-semibold"><i class="fa-solid fa-chart-line"></i><span>Automatically updated</span></div>
+                        <h1 class="mt-3 text-3xl sm:text-4xl font-extrabold text-white">Hit list</h1>
+                        <p class="mt-2 text-sm text-slate-400">依觀看次數自動排列熱門影音，並同步顯示最新上架內容。</p>
+                    </div>
+                    <button onclick="refreshPublishedMedia(true)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white"><i class="fa-solid fa-rotate mr-1.5"></i>同步更新</button>
+                </div>
+                <section class="space-y-4">
+                    <div class="flex items-center gap-2"><i class="fa-solid fa-fire text-orange-400"></i><h2 class="text-xl font-bold text-white">熱門排行</h2></div>
+                    <div id="hit-list-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+                </section>
+                <section class="space-y-4">
+                    <div class="flex items-center gap-2"><i class="fa-solid fa-sparkles text-cyan-300"></i><h2 class="text-xl font-bold text-white">New 最新上架</h2></div>
+                    <div id="new-list-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL 1: Google SDK 原生驗證 Modal -->
+    <div id="gmailModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-md w-full rounded-2xl p-6 border border-slate-700 shadow-2xl relative space-y-5">
+            <input type="text" id="hp_login_trap" class="hp-bot-trap" tabindex="-1" autocomplete="off">
+            <button onclick="closeModal('gmailModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <div class="text-center space-y-2">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center shadow-lg">
+                    <svg class="w-8 h-8" viewBox="0 0 24 24">
+                        <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.2 9 5 12 5z"/>
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                        <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12s.7 2.3 1.9 4.7l3.7-2.9z"/>
+                        <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.2-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-white">Google 官方帳號安全登入</h3>
+                <p class="text-xs text-slate-400">使用 Google 原生憑證登入，保障隱私安全並同步個人觀看庫與訂閱方案。</p>
+            </div>
+
+            <div class="py-2 flex flex-col items-center justify-center min-h-[50px]">
+                <div id="google-signin-button"></div>
+            </div>
+
+            <div class="relative py-1">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800"></div></div>
+                <div class="relative flex justify-center text-[10px]"><span class="bg-slate-900 px-2 text-slate-500">開發測試捷徑 (免 API Key 預覽)</span></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="loginMockUser('alex.creator@gmail.com', 'Alex (付費會員 Pro)', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80', true)" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-left">
+                    <div class="text-xs font-bold text-white truncate">Pro 付費會員</div>
+                    <div class="text-[10px] text-amber-400">解鎖高清全片</div>
+                </button>
+                <button onclick="loginMockUser('free.user@gmail.com', 'Sam (免費用戶)', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80', false)" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl text-left">
+                    <div class="text-xs font-bold text-white truncate">免費用戶</div>
+                    <div class="text-[10px] text-slate-400">試看 15 秒</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Personal media library (完整群組管理介面) -->
+    <div id="libraryModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-3xl w-full rounded-2xl border border-slate-700 shadow-2xl overflow-hidden max-h-[88vh] flex flex-col">
+            <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+                <div><h3 class="text-xl font-bold text-white">我的影音庫</h3><p class="text-xs text-slate-400 mt-1">私人收藏、最愛與播放清單只保存在這個瀏覽器</p></div>
+                <button onclick="closeModal('libraryModal')" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-xs"><span class="text-slate-400">自動回播：</span><button id="autoplay-mode-button" onclick="cycleAutoplayMode()" class="px-3 py-2 rounded-xl bg-brand-600 text-white font-bold"><i class="fa-solid fa-repeat mr-1"></i><span>關閉</span></button></div>
+                <span class="text-[11px] text-slate-500">可選：關閉／單片循環／清單連播</span>
+                <div class="w-full flex gap-2">
+                    <input id="new-playlist-group-name" maxlength="40" placeholder="自訂播放清單群組名稱" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500">
+                    <button onclick="createPlaylistGroup()" class="px-4 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-md">
+                        <i class="fa-solid fa-folder-plus"></i><span>建立群組</span>
+                    </button>
+                </div>
+            </div>
+            <div id="personal-library-content" class="p-5 overflow-y-auto space-y-6"></div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Real Video Player Modal with Paywall -->
+    <div id="playerModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-2 sm:p-6 hidden">
+        <div class="glass-card max-w-4xl w-full rounded-3xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span id="player-type-badge" class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold uppercase">VIDEO 4K</span>
+                    <h3 id="player-title" class="text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md">FullStack 全棧開發實戰</h3>
+                </div>
+                <button onclick="closePlayer()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Video Screen -->
+            <div class="relative bg-black aspect-video flex items-center justify-center overflow-hidden" oncontextmenu="return false;">
+                <video id="real-video-player" class="w-full h-full object-contain bg-black" playsinline controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" draggable="false">
+                    <source id="video-source" src="">
+                    您的瀏覽器不支援影片播放。
+                </video>
+
+                <div id="media-error-overlay" class="hidden absolute inset-0 z-40 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center gap-4">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-400 text-4xl"></i>
+                    <div><h4 class="text-lg font-bold text-white">影音來源載入失敗</h4><p id="media-error-message" class="text-xs text-slate-400 mt-2 max-w-lg">請檢查影音 URL、公開存取權限、CORS 或影片格式。</p></div>
+                    <button onclick="openActiveSourceDirectly()" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>直接開啟原始影片檢查</button>
+                </div>
+
+                <!-- 15s Countdown -->
+                <div id="preview-countdown-box" class="absolute top-4 left-4 z-20 bg-amber-500/90 text-slate-950 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>免費試看剩餘：<span id="countdown-num" class="font-mono text-sm">15</span> 秒</span>
+                </div>
+
+                <!-- Unlocked Paid Badge -->
+                <div id="paid-unlocked-box" class="hidden absolute top-4 left-4 z-20 bg-emerald-500/90 text-slate-950 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Pro 付費會員 · 已解鎖高清全片</span>
+                </div>
+
+                <!-- Paywall Overlay -->
+                <div id="paywall-overlay" class="hidden absolute inset-0 z-30 paywall-overlay flex flex-col items-center justify-center p-6 text-center space-y-4">
+                    <div class="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500 text-amber-400 flex items-center justify-center text-2xl shadow-xl shadow-amber-500/10">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <div class="max-w-md space-y-2">
+                        <h4 class="text-xl sm:text-2xl font-extrabold text-white">15 秒免費試看已結束</h4>
+                        <p class="text-xs sm:text-sm text-slate-300">
+                            這部高畫質原創影音僅提供給付費訂閱用戶。立即升級 Pro 方案，隨時無限暢享 500+ 高清課程與獨家節目！
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full max-w-xs">
+                        <button onclick="openModal('subscriptionModal')" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-crown"></i> <span>立即升級方案（NT$190／月）</span>
+                        </button>
+                        <button onclick="replayPreview()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs border border-slate-700">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> <span>重播 15 秒試看</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Controls -->
+            <div class="p-4 bg-slate-900 border-t border-slate-800 space-y-3">
+                <div class="space-y-1">
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden cursor-pointer" onclick="handleSeek(event)">
+                        <div id="player-progress" class="bg-gradient-to-r from-brand-500 to-purple-500 h-full w-0 transition-all duration-100"></div>
+                    </div>
+                    <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                        <span id="player-current-time">00:00</span>
+                        <span id="player-total-time">00:00</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <button onclick="togglePlayPause()" id="btn-play-pause" class="w-10 h-10 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shadow-lg transition-all">
+                            <i id="play-pause-icon" class="fa-solid fa-pause"></i>
+                        </button>
+                        <div>
+                            <div id="player-creator-name" class="text-xs font-bold text-white">Alex Tech 課堂</div>
+                            <div class="text-[10px] text-slate-400">收益將自動由智慧分紅引擎即時撥款</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button id="player-save-button" onclick="toggleCollection('saved', activePlayerMediaId)" class="text-slate-400 hover:text-emerald-300 text-sm" title="私藏"><i class="fa-solid fa-bookmark"></i></button>
+                        <button id="player-favorite-button" onclick="toggleCollection('favorites', activePlayerMediaId)" class="text-slate-400 hover:text-pink-400 text-sm" title="設為最愛"><i class="fa-solid fa-heart"></i></button>
+                        <button id="player-playlist-button" onclick="toggleCollection('playlist', activePlayerMediaId)" class="text-slate-400 hover:text-brand-300 text-sm" title="加入播放清單"><i class="fa-solid fa-list-ul"></i></button>
+                        <!-- 播放器內加入自訂群組按鈕 -->
+                        <button onclick="addToPlaylistGroup(activePlayerMediaId, event)" class="text-slate-400 hover:text-violet-300 text-sm" title="加入自訂播放清單群組"><i class="fa-solid fa-folder-plus"></i></button>
+                        <button onclick="openShareModal(activePlayerMediaId, event)" class="text-slate-400 hover:text-cyan-300 text-sm" title="分享影音 (支援 SMS 簡訊)"><i class="fa-solid fa-share-nodes"></i></button>
+                        <button id="player-autoplay-button" onclick="cycleAutoplayMode()" class="text-slate-400 hover:text-purple-300 text-sm" title="自動回播"><i class="fa-solid fa-repeat"></i></button>
+                        <button onclick="toggleMute()" class="text-slate-400 hover:text-white text-sm">
+                            <i id="mute-icon" class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700 font-mono">MULTI-CLOUD STREAM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Subscription Modal -->
+    <div id="subscriptionModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-md w-full rounded-2xl p-6 border border-slate-700 shadow-2xl relative space-y-4">
+            <button onclick="closeModal('subscriptionModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xl font-bold">
+                <i class="fa-solid fa-crown"></i>
+            </div>
+            
+            <div>
+                <h3 class="text-xl font-bold text-white">升級 Pro 會員 · 解鎖全站高清影音</h3>
+                <p class="text-xs text-slate-400 mt-1">使用已登入的 Google 帳號進行訂閱，可獲得無限制高清串流與無廣告體驗。</p>
+            </div>
+
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3 text-xs">
+                <div class="flex justify-between font-bold text-white">
+                    <span>用戶 Google 帳號：</span>
+                    <span id="sub-modal-email" class="text-brand-300">user@gmail.com</span>
+                </div>
+                <label class="flex items-center justify-between gap-3 p-3 rounded-xl border border-brand-500 bg-brand-500/10 cursor-pointer">
+                    <span><input type="radio" name="viewer-plan" value="monthly" checked class="mr-2 accent-indigo-500"><strong class="text-white">月繳方案</strong><small class="block ml-5 mt-1 text-slate-400">付款後完整觀看所有影音 1 個月</small></span>
+                    <span class="text-emerald-400 font-mono font-bold">NT$190</span>
+                </label>
+                <label class="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-700 hover:border-brand-500 bg-slate-950/40 cursor-pointer">
+                    <span><input type="radio" name="viewer-plan" value="annual" class="mr-2 accent-indigo-500"><strong class="text-white">年繳方案</strong><small class="block ml-5 mt-1 text-slate-400">付款後完整觀看所有影音 1 年</small></span>
+                    <span class="text-emerald-400 font-mono font-bold">NT$2,080</span>
+                </label>
+            </div>
+
+            <button onclick="processSubscription()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold rounded-xl text-sm transition-all shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-lock-open mr-1.5"></i> <span>確認方案並解鎖全站內容</span>
+            </button>
+            <p class="text-[10px] leading-relaxed text-slate-500">目前為前端訂閱權限流程示範，不會產生真實扣款。正式收款需連接安全金流後端並由後端驗證付款。</p>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Share to SMS / Clipboard Modal -->
+    <div id="shareModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-sm w-full rounded-2xl p-6 border border-slate-700 shadow-2xl relative space-y-4">
+            <button onclick="closeModal('shareModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-share-nodes"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white">分享影音</h3>
+                    <p class="text-[11px] text-slate-400">選擇分享途徑或發送簡訊給朋友</p>
+                </div>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                <div id="share-target-title" class="text-xs font-bold text-white truncate">影音標題</div>
+                <div id="share-target-url" class="text-[10px] text-slate-500 truncate font-mono">https://...</div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2 pt-1">
+                <button id="btn-share-sms" onclick="executeSmsShare()" class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md">
+                    <i class="fa-solid fa-comment-sms text-sm"></i>
+                    <span>透過 SMS 簡訊發送連結</span>
+                </button>
+                <button onclick="executeCopyShareLink()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs border border-slate-700 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-copy"></i>
+                    <span>複製分享連結</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 glass-card bg-slate-900/90 border border-brand-500/50 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span id="toast-message" class="text-sm font-medium">操作已順利完成！</span>
+    </div>
+
+    <!-- JavaScript Section -->
+    <script>
+        const GOOGLE_CLIENT_ID = "315824510931-qinea3snoc877a2tlqq8g9hmhhcsbfq9.apps.googleusercontent.com";
+
+        let currentUser = null;
+        const SUBSCRIPTION_KEY = 'streampulse_paid_subscription';
+        let activePlayerMediaId = null;
+        let pendingShareMedia = null;
+        let isPlaying = false;
+        let isMuted = false;
+        const COLLECTION_KEYS = {
+            saved: 'streampulse_saved_media',
+            favorites: 'streampulse_favorite_media',
+            playlist: 'streampulse_playlist_media',
+            autoplay: 'streampulse_autoplay_mode',
+            groups: 'streampulse_playlist_groups_v1'
+        };
+        let personalLibrary = { saved: [], favorites: [], playlist: [] };
+        let playlistGroups = [];
+        let autoplayMode = 'off';
+
+        let mediaDatabase = [
+            { 
+                id: 1,
+                title: "FullStack 全棧開發實戰：從 0 到 1 打造 AI App", 
+                creator: "Alex Tech 課堂", 
+                splitRate: 70,
+                type: "video", 
+                duration: "00:52",
+                views: "12.4k",
+                publishedAt: "2026-08-01T00:00:00Z",
+                thumb: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
+                src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" 
+            },
+            { 
+                id: 2,
+                title: "EP.88 矽谷 SaaS 創業者的商業模式與變現心法", 
+                creator: "創投深度對談 Podcast", 
+                splitRate: 60,
+                type: "audio", 
+                duration: "01:00",
+                views: "8.9k",
+                publishedAt: "2026-08-02T00:00:00Z",
+                thumb: "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600&auto=format&fit=crop&q=80",
+                src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" 
+            },
+            { 
+                id: 3,
+                title: "城市光影：4K 獨立微電影選集《最後的串流》", 
+                creator: "影人聯合工作室", 
+                splitRate: 65,
+                type: "video", 
+                duration: "00:30",
+                views: "15.1k",
+                publishedAt: "2026-08-03T00:00:00Z",
+                thumb: "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop&q=80",
+                src: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" 
+            }
+        ];
+
+        // --- 防機器人蜜罐校驗 (Honeypot Verification) ---
+        function checkBotHoneypot() {
+            const siteToken = document.getElementById('hp_site_token')?.value;
+            const loginTrap = document.getElementById('hp_login_trap')?.value;
+            if ((siteToken && siteToken.trim() !== '') || (loginTrap && loginTrap.trim() !== '')) {
+                console.warn("[Bot Detected] 攔截到自動化機器人填充行為。");
+                return true;
+            }
+            return false;
+        }
+
+        // --- 全局禁止右鍵下載與防盜保護 ---
+        function setupDownloadProtection() {
+            document.addEventListener('contextmenu', (e) => {
+                if (e.target.closest('video, audio, #real-video-player, #media-grid, #hit-list-grid, #new-list-grid, .glass-card')) {
+                    e.preventDefault();
+                    showToast('原創版權保護中，已禁止右鍵選單與下載。', 'fa-shield-halved text-amber-400');
+                    return false;
+                }
+            });
+
+            document.addEventListener('dragstart', (e) => {
+                if (e.target.closest('video, audio, img')) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    showToast('本平台不支援頁面或影音另存新檔。', 'fa-shield-halved text-rose-400');
+                    return false;
+                }
+            });
+
+            const enforceAttributes = () => {
+                document.querySelectorAll('video, audio').forEach(el => {
+                    el.setAttribute('controlsList', 'nodownload noplaybackrate');
+                    el.setAttribute('disablePictureInPicture', '');
+                    el.setAttribute('draggable', 'false');
+                });
+            };
+            enforceAttributes();
+            new MutationObserver(enforceAttributes).observe(document.body, { childList: true, subtree: true });
+        }
+
+        // --- SMS 簡訊與連結分享系統 ---
+        function openShareModal(mediaId, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (checkBotHoneypot()) return;
+
+            const item = mediaDatabase.find(m => Number(m.id) === Number(mediaId));
+            if (!item) {
+                showToast('找不到欲分享的影音。', 'fa-circle-xmark text-rose-400');
+                return;
+            }
+
+            pendingShareMedia = item;
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', item.src);
+
+            document.getElementById('share-target-title').innerText = item.title;
+            document.getElementById('share-target-url').innerText = shareUrl.href;
+            openModal('shareModal');
+        }
+
+        function executeSmsShare() {
+            if (!pendingShareMedia) return;
+            if (checkBotHoneypot()) return;
+
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', pendingShareMedia.src);
+
+            const textBody = `【StreamPulse 推薦影音】${pendingShareMedia.title}：${shareUrl.href}`;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const smsDelimiter = isIOS ? '&' : '?';
+            const smsUrl = `sms:${smsDelimiter}body=${encodeURIComponent(textBody)}`;
+
+            window.location.href = smsUrl;
+            showToast('已開啟 SMS 簡訊應用程式。', 'fa-comment-sms text-emerald-400');
+            closeModal('shareModal');
+        }
+
+        async function executeCopyShareLink() {
+            if (!pendingShareMedia) return;
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', pendingShareMedia.src);
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(shareUrl.href);
+                } else {
+                    const box = document.createElement('textarea');
+                    box.value = shareUrl.href;
+                    document.body.appendChild(box);
+                    box.select();
+                    document.execCommand('copy');
+                    box.remove();
+                }
+                showToast('分享連結已成功複製到剪貼簿！', 'fa-copy text-cyan-300');
+                closeModal('shareModal');
+            } catch (_) {
+                showToast('複製失敗，請手動選取網址。', 'fa-circle-xmark text-rose-400');
+            }
+        }
+
+        // --- Google 原生 SDK 憑證處理 ---
+        function decodeJwtResponse(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error("JWT 解碼失敗", e);
+                return null;
+            }
+        }
+
+        function handleCredentialResponse(response) {
+            if (!response || !response.credential || checkBotHoneypot()) return;
+            const payload = decodeJwtResponse(response.credential);
+            if (!payload || !payload.email) return;
+
+            const email = payload.email;
+            const name = payload.name || payload.given_name || email.split('@')[0];
+            const picture = payload.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80';
+
+            const subscription = getStoredSubscription(email);
+            currentUser = subscription
+                ? { email, name, picture, isPaid: true, plan: subscription.plan, expiresAt: subscription.expiresAt }
+                : { email, name, picture, isPaid: false };
+
+            localStorage.setItem('streampulse_current_user_v1', JSON.stringify(currentUser));
+            closeModal('gmailModal');
+            updateUserUI();
+            showToast(`歡迎回來！已透過 Google 登入 (${email})`, 'fa-circle-check text-emerald-400');
+
+            if (!document.getElementById('playerModal').classList.contains('hidden')) {
+                startMediaPlayback();
+            }
+        }
+
+        function initGoogleAuth() {
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+                setTimeout(initGoogleAuth, 300);
+                return;
+            }
+
+            try {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+
+                const btnContainer = document.getElementById('google-signin-button');
+                if (btnContainer) {
+                    google.accounts.id.renderButton(
+                        btnContainer,
+                        { theme: 'filled_blue', size: 'large', type: 'standard', shape: 'rectangular', text: 'signin_with', width: 280 }
+                    );
+                }
+
+                if (!currentUser) {
+                    google.accounts.id.prompt();
+                }
+            } catch (err) {
+                console.warn("Google SDK 初始化跳過：", err);
+            }
+        }
+
+        function loginMockUser(email, name, picture, isPaid = false) {
+            if (checkBotHoneypot()) return;
+            const subscription = getStoredSubscription(email);
+            currentUser = subscription
+                ? { email, name, picture, isPaid: true, plan: subscription.plan, expiresAt: subscription.expiresAt }
+                : { email, name, picture, isPaid };
+            localStorage.setItem('streampulse_current_user_v1', JSON.stringify(currentUser));
+            closeModal('gmailModal');
+            updateUserUI();
+            showToast(`已切換至測試帳號：${email}`, 'fa-circle-check text-emerald-400');
+            if (!document.getElementById('playerModal').classList.contains('hidden')) {
+                startMediaPlayback();
+            }
+        }
+
+        // --- 使用者狀態與介面更新 ---
+        function updateUserUI() {
+            const btnLogin = document.getElementById('btn-login-gmail');
+            const badge = document.getElementById('user-profile-badge');
+            const statusBadge = document.getElementById('user-status-badge');
+            const avatar = document.getElementById('user-avatar');
+
+            if (currentUser) {
+                if (btnLogin) btnLogin.classList.add('hidden');
+                if (badge) badge.classList.remove('hidden');
+                const emailDisp = document.getElementById('user-email-display');
+                if (emailDisp) emailDisp.innerText = currentUser.email;
+                const dropEmail = document.getElementById('dropdown-user-email');
+                if (dropEmail) dropEmail.innerText = currentUser.email;
+                const dropName = document.getElementById('dropdown-user-name');
+                if (dropName) dropName.innerText = currentUser.name || 'Google User';
+                if (avatar && currentUser.picture) avatar.src = currentUser.picture;
+                
+                if (statusBadge) {
+                    if (currentUser.isPaid) {
+                        const planName = currentUser.plan === 'annual' ? '年繳' : '月繳';
+                        statusBadge.innerHTML = `<i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Pro ${planName} VIP (完整影音)`;
+                        statusBadge.className = 'text-[9px] font-semibold text-emerald-400 flex items-center gap-1';
+                        const toggleText = document.getElementById('toggle-pay-text');
+                        if (toggleText) toggleText.innerText = '切換為 [免費會員] 狀態';
+                    } else {
+                        statusBadge.innerHTML = `<i class="fa-solid fa-lock text-[8px]"></i> 免費會員 (試看 15s)`;
+                        statusBadge.className = 'text-[9px] font-semibold text-amber-400 flex items-center gap-1';
+                        const toggleText = document.getElementById('toggle-pay-text');
+                        if (toggleText) toggleText.innerText = '切換為 [付費會員] 狀態';
+                    }
+                }
+            } else {
+                if (btnLogin) btnLogin.classList.remove('hidden');
+                if (badge) badge.classList.add('hidden');
+            }
+        }
+
+        function toggleUserDropdown() {
+            const drop = document.getElementById('user-dropdown');
+            if (drop) drop.classList.toggle('hidden');
+        }
+
+        function getStoredSubscription(email) {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SUBSCRIPTION_KEY) || 'null');
+                if (!saved || saved.email !== email || !saved.expiresAt || Date.now() >= saved.expiresAt) return null;
+                return saved;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function handleLogout() {
+            if (currentUser && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.revoke(currentUser.email, () => {});
+            }
+            currentUser = null;
+            localStorage.removeItem('streampulse_current_user_v1');
+            const drop = document.getElementById('user-dropdown');
+            if (drop) drop.classList.add('hidden');
+            updateUserUI();
+            showToast('已登出帳號', 'fa-right-from-bracket text-slate-400');
+            if (!document.getElementById('playerModal').classList.contains('hidden')) {
+                closePlayer();
+            }
+        }
+
+        function togglePaidSimulate() {
+            if (!currentUser) {
+                loginMockUser('demo.user@gmail.com', 'Demo User', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80', true);
+                return;
+            }
+            currentUser.isPaid = !currentUser.isPaid;
+            updateUserUI();
+            const drop = document.getElementById('user-dropdown');
+            if (drop) drop.classList.add('hidden');
+            showToast(currentUser.isPaid ? '已切換為：[Pro 付費會員]' : '已切換為：[免費會員]');
+            
+            if (!document.getElementById('playerModal').classList.contains('hidden')) {
+                startMediaPlayback();
+            }
+        }
+
+        function processSubscription() {
+            if (checkBotHoneypot()) return;
+            if (!currentUser) {
+                closeModal('subscriptionModal');
+                openModal('gmailModal');
+                return;
+            }
+
+            const selected = document.querySelector('input[name="viewer-plan"]:checked');
+            const plan = selected && selected.value === 'annual' ? 'annual' : 'monthly';
+            const expiry = new Date();
+            expiry.setMonth(expiry.getMonth() + (plan === 'annual' ? 12 : 1));
+            currentUser.isPaid = true;
+            currentUser.plan = plan;
+            currentUser.expiresAt = expiry.getTime();
+            localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify({
+                email: currentUser.email, plan, expiresAt: currentUser.expiresAt
+            }));
+            updateUserUI();
+            closeModal('subscriptionModal');
+            showToast(`方案啟用成功，全站影音已解鎖！`, 'fa-crown text-amber-400');
+
+            if (!document.getElementById('playerModal').classList.contains('hidden')) {
+                startMediaPlayback();
+            }
+        }
+
+        // --- 影音大廳渲染與自訂分類 ---
+        let currentMediaType = 'all';
+        let currentMediaCategory = '';
+        let currentMediaSearch = '';
+        const PERSONAL_CATEGORY_KEY = 'streampulse_personal_media_meta_v1';
+        let personalCategories = {};
+
+        function loadPersonalCategories() {
+            try { personalCategories = JSON.parse(localStorage.getItem(PERSONAL_CATEGORY_KEY) || '{}') || {}; }
+            catch (_) { personalCategories = {}; }
+        }
+
+        function effectiveMediaMeta(item) {
+            const custom = personalCategories[String(item.id)] || {};
+            return {
+                title: custom.title || item.title || '',
+                creator: custom.creator || item.creator || '',
+                category: custom.category || item.category || '未分類'
+            };
+        }
+        function effectiveCategory(item) { return effectiveMediaMeta(item).category; }
+
+        function setPersonalCategory(mediaId, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            const item = mediaDatabase.find(media => Number(media.id) === Number(mediaId));
+            if (!item) return;
+            const current = effectiveMediaMeta(item);
+            const title = prompt('自訂顯示標題（只保存在本裝置）：', current.title); if (title === null) return;
+            const creator = prompt('自訂頻道／創作者：', current.creator); if (creator === null) return;
+            const category = prompt('自訂分類名稱：', current.category); if (category === null) return;
+            personalCategories[String(mediaId)] = { title: title.trim() || item.title, creator: creator.trim() || item.creator, category: category.trim() || item.category || '未分類' };
+            localStorage.setItem(PERSONAL_CATEGORY_KEY, JSON.stringify(personalCategories));
+            renderMediaGrid();
+            showToast('個人自訂資訊已儲存。', 'fa-folder text-cyan-300');
+        }
+
+        function detectSourceProvider(value) {
+            try {
+                const host = new URL(value).hostname.toLowerCase();
+                if (host.includes('backblazeb2.com') || host.includes('backblaze.com')) return 'Backblaze B2';
+                if (host.includes('r2.dev') || host.includes('cloudflare')) return 'Cloudflare R2';
+                if (host.includes('googleapis.com')) return 'Google Cloud';
+                return '外部雲端';
+            } catch (_) {
+                return '外部雲端';
+            }
+        }
+
+        function renderMediaGrid() {
+            const grid = document.getElementById('media-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const normalizedSearch = currentMediaSearch.trim().toLocaleLowerCase();
+            const filteredMedia = mediaDatabase.filter(item => {
+                const typeMatches = currentMediaType === 'all' || item.type === currentMediaType;
+                const meta = effectiveMediaMeta(item);
+                const categoryMatches = !currentMediaCategory || meta.category.toLocaleLowerCase().includes(currentMediaCategory.toLocaleLowerCase());
+                const haystack = `${meta.title} ${meta.creator} ${meta.category}`.toLocaleLowerCase();
+                return typeMatches && categoryMatches && (!normalizedSearch || haystack.includes(normalizedSearch));
+            });
+
+            updateMediaCounts(filteredMedia.length);
+
+            if (!filteredMedia.length) {
+                grid.innerHTML = '<div class="sm:col-span-2 lg:col-span-3 py-16 text-center text-slate-500"><i class="fa-solid fa-magnifying-glass text-2xl mb-3"></i><p>找不到符合條件的影音</p></div>';
+                return;
+            }
+
+            filteredMedia.forEach(item => {
+                const meta = effectiveMediaMeta(item);
+                const card = document.createElement('div');
+                card.className = "glass-card rounded-2xl overflow-hidden border border-slate-800 hover:border-brand-500/50 transition-all group flex flex-col justify-between";
+
+                card.innerHTML = `
+                    <div>
+                        <div class="relative aspect-video bg-slate-900 overflow-hidden cursor-pointer" onclick="openPlayer(${item.id})">
+                            <img src="${item.thumb}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100" onerror="this.src='https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop&q=80'">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                            
+                            <div class="absolute top-3 left-3 flex items-center gap-1.5">
+                                <span class="px-2 py-0.5 rounded-md ${item.type === 'video' ? 'bg-rose-500/90' : 'bg-purple-500/90'} text-white font-bold text-[10px] uppercase tracking-wider">${item.type === 'video' ? 'Video 4K' : 'Audio'}</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-950/80 text-cyan-300 border border-cyan-500/30 font-bold text-[10px]">${item.provider || detectSourceProvider(item.src)}</span>
+                                <span class="px-2 py-0.5 rounded-md bg-amber-500/90 text-slate-950 font-bold text-[10px] flex items-center gap-1">
+                                    <i class="fa-solid fa-lock text-[8px]"></i> 試看 15s
+                                </span>
+                            </div>
+                            <div class="absolute bottom-3 right-3 text-white text-xs bg-slate-950/80 px-2 py-0.5 rounded font-mono">${item.duration || '00:00'}</div>
+                            
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="w-12 h-12 rounded-full ${item.type === 'video' ? 'bg-brand-600/90' : 'bg-purple-600/90'} text-white flex items-center justify-center text-lg shadow-xl group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid ${item.type === 'video' ? 'fa-play ml-1' : 'fa-headphones'}"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 space-y-2">
+                            <div class="flex items-center justify-between text-xs text-slate-400">
+                                <span class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-brand-600/30 flex items-center justify-center"><i class="fa-solid fa-user"></i></span><span>${meta.creator}</span></span>
+                                <span class="text-brand-400 font-semibold"><i class="fa-solid fa-coins mr-1"></i> 分紅 ${item.splitRate}%</span>
+                            </div>
+                            <span class="inline-flex px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[10px] font-bold">${effectiveCategory(item)}</span>
+                            <h3 class="text-base font-bold text-white group-hover:text-brand-300 transition-colors line-clamp-1">
+                                ${meta.title}
+                            </h3>
+                            <div class="flex items-center gap-2 pt-1">
+                                <button onclick="toggleCollection('saved', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.saved.includes(item.id) ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="私藏"><i class="fa-solid fa-bookmark"></i></button>
+                                <button onclick="toggleCollection('favorites', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.favorites.includes(item.id) ? 'bg-pink-500/20 border-pink-500/50 text-pink-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="最愛"><i class="fa-solid fa-heart"></i></button>
+                                <button onclick="toggleCollection('playlist', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.playlist.includes(item.id) ? 'bg-brand-500/20 border-brand-500/50 text-brand-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="播放清單"><i class="fa-solid fa-list-ul"></i></button>
+                                <!-- 卡片加入群組按鈕 -->
+                                <button onclick="addToPlaylistGroup(${item.id}, event)" class="w-8 h-8 rounded-lg border bg-violet-500/15 border-violet-500/40 text-violet-300 hover:bg-violet-500/25" title="加入自訂播放清單群組"><i class="fa-solid fa-folder-plus"></i></button>
+                                <button onclick="setPersonalCategory(${item.id}, event)" class="w-8 h-8 rounded-lg border bg-cyan-500/15 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25" title="自訂分類"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button onclick="openShareModal(${item.id}, event)" class="w-8 h-8 rounded-lg border bg-slate-900 border-slate-700 text-cyan-300 hover:border-cyan-500" title="分享 (支援 SMS 簡訊)"><i class="fa-solid fa-share-nodes"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 pt-0 border-t border-slate-800/60 flex items-center justify-between">
+                        <span class="text-xs text-slate-400"><i class="fa-solid fa-eye mr-1"></i> ${item.views}</span>
+                        <button onclick="openPlayer(${item.id})" class="text-xs font-semibold text-brand-400 hover:text-brand-300 flex items-center gap-1">
+                            <span>立即試聽/觀看</span> <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function updateMediaCounts(showingCount) {
+            const total = mediaDatabase.length;
+            const videos = mediaDatabase.filter(item => item.type !== 'audio').length;
+            const audios = mediaDatabase.filter(item => item.type === 'audio').length;
+            const map = {
+                'media-total-count': total,
+                'media-video-count': videos,
+                'media-audio-count': audios,
+                'media-showing-count': showingCount !== undefined ? showingCount : total
+            };
+            Object.entries(map).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = val.toLocaleString();
+            });
+        }
+
+        function filterMedia(type) {
+            currentMediaType = type;
+            ['filter-all', 'filter-video', 'filter-audio'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.className = 'px-3 py-1.5 rounded-lg text-slate-400 hover:text-white';
+            });
+            const activeBtn = document.getElementById(`filter-${type}`);
+            if (activeBtn) activeBtn.className = 'px-3 py-1.5 rounded-lg bg-brand-600 text-white';
+            renderMediaGrid();
+        }
+
+        function filterCategory(val) {
+            currentMediaCategory = (val || '').trim();
+            renderMediaGrid();
+        }
+
+        function searchMedia(val) {
+            currentMediaSearch = (val || '').trim();
+            renderMediaGrid();
+        }
+
+        // --- Hit List ---
+        function numericViews(value) {
+            const text = String(value || '0').trim().toLowerCase().replace(/,/g, '');
+            const number = parseFloat(text) || 0;
+            if (text.includes('m')) return number * 1000000;
+            if (text.includes('k')) return number * 1000;
+            return number;
+        }
+
+        function hitListCard(item, index, isNew) {
+            const meta = effectiveMediaMeta(item);
+            const badge = isNew
+                ? '<span class="px-2.5 py-1 rounded-lg text-xs font-black shadow-lg bg-cyan-500 text-slate-950">NEW</span>'
+                : `<span class="px-2.5 py-1 rounded-lg text-xs font-black shadow-lg bg-gradient-to-r from-orange-500 to-rose-500 text-white">#${index + 1}</span>`;
+            return `<article onclick="openPlayer(${item.id})" class="group cursor-pointer glass-card rounded-2xl overflow-hidden border border-slate-800 hover:border-brand-500/60 transition-all">
+                <div class="relative aspect-video bg-slate-900 overflow-hidden">
+                    <img src="${item.thumb}" alt="${meta.title}" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" onerror="this.src='https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop&q=80'">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                    <div class="absolute top-3 left-3">${badge}</div>
+                    <div class="absolute inset-0 flex items-center justify-center"><span class="w-11 h-11 rounded-full bg-brand-600/90 text-white flex items-center justify-center shadow-xl"><i class="fa-solid fa-play ml-0.5"></i></span></div>
+                </div>
+                <div class="p-4"><h3 class="font-bold text-white line-clamp-2 group-hover:text-brand-300">${meta.title}</h3><div class="mt-2 flex items-center justify-between gap-3 text-xs text-slate-400"><span class="truncate">${meta.creator}</span><span class="shrink-0"><i class="fa-solid fa-eye mr-1"></i>${item.views}</span></div></div>
+            </article>`;
+        }
+
+        function renderHitList() {
+            const hitRoot = document.getElementById('hit-list-grid');
+            const newRoot = document.getElementById('new-list-grid');
+            if (!hitRoot || !newRoot) return;
+            const ranked = [...mediaDatabase].sort((a, b) => numericViews(b.views) - numericViews(a.views)).slice(0, 6);
+            const newest = mediaDatabase.slice(0, 6);
+            hitRoot.innerHTML = ranked.map((item, index) => hitListCard(item, index, false)).join('');
+            newRoot.innerHTML = newest.map((item, index) => hitListCard(item, index, true)).join('');
+        }
+
+        // --- 播放器與試看防護 ---
+        function openPlayer(mediaId) {
+            activePlayerMediaId = mediaId;
+            const item = mediaDatabase.find(m => m.id === mediaId) || mediaDatabase[0];
+
+            document.getElementById('player-title').innerText = item.title;
+            document.getElementById('player-type-badge').innerText = `${item.type === 'video' ? 'VIDEO 4K' : 'AUDIO'} · ${item.provider || detectSourceProvider(item.src)}`;
+            document.getElementById('player-creator-name').innerText = `${item.creator} (分紅 ${item.splitRate}%)`;
+            updatePlayerCollectionButtons();
+
+            openModal('playerModal');
+            startMediaPlayback();
+        }
+
+        function startMediaPlayback() {
+            const video = document.getElementById('real-video-player');
+            const source = document.getElementById('video-source');
+            const item = mediaDatabase.find(m => m.id === activePlayerMediaId) || mediaDatabase[0];
+            document.getElementById('media-error-overlay').classList.add('hidden');
+
+            if (source.getAttribute('src') !== item.src) {
+                source.setAttribute('src', item.src);
+                video.load();
+            }
+
+            video.currentTime = 0;
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    isPlaying = true;
+                    document.getElementById('play-pause-icon').className = 'fa-solid fa-pause';
+                }).catch(() => {
+                    isPlaying = false;
+                    document.getElementById('play-pause-icon').className = 'fa-solid fa-play';
+                });
+            }
+
+            document.getElementById('paywall-overlay').classList.add('hidden');
+            const isPaid = currentUser && currentUser.isPaid;
+
+            if (isPaid) {
+                document.getElementById('preview-countdown-box').classList.add('hidden');
+                document.getElementById('paid-unlocked-box').classList.remove('hidden');
+
+                video.ontimeupdate = function() {
+                    if (video.duration) {
+                        const progressPct = (video.currentTime / video.duration) * 100;
+                        document.getElementById('player-progress').style.width = `${progressPct}%`;
+                        document.getElementById('player-current-time').innerText = formatTime(video.currentTime);
+                        document.getElementById('player-total-time').innerText = formatTime(video.duration);
+                    }
+                };
+            } else {
+                document.getElementById('preview-countdown-box').classList.remove('hidden');
+                document.getElementById('paid-unlocked-box').classList.add('hidden');
+                document.getElementById('countdown-num').innerText = '15';
+
+                video.ontimeupdate = function() {
+                    const currentTime = Math.floor(video.currentTime);
+                    const timeLeft = Math.max(0, 15 - currentTime);
+                    document.getElementById('countdown-num').innerText = timeLeft;
+
+                    const progressPct = (video.currentTime / 15) * 100;
+                    document.getElementById('player-progress').style.width = `${Math.min(100, progressPct)}%`;
+                    document.getElementById('player-current-time').innerText = formatTime(video.currentTime);
+                    document.getElementById('player-total-time').innerText = "00:15 (試看)";
+
+                    if (video.currentTime >= 15) {
+                        video.pause();
+                        video.ontimeupdate = null;
+                        isPlaying = false;
+                        document.getElementById('play-pause-icon').className = 'fa-solid fa-play';
+                        document.getElementById('paywall-overlay').classList.remove('hidden');
+                    }
+                };
+            }
+        }
+
+        function replayPreview() {
+            startMediaPlayback();
+        }
+
+        function togglePlayPause() {
+            const video = document.getElementById('real-video-player');
+            if (!currentUser || (!currentUser.isPaid && video.currentTime >= 15)) {
+                document.getElementById('paywall-overlay').classList.remove('hidden');
+                return;
+            }
+            if (video.paused) {
+                video.play();
+                isPlaying = true;
+                document.getElementById('play-pause-icon').className = 'fa-solid fa-pause';
+            } else {
+                video.pause();
+                isPlaying = false;
+                document.getElementById('play-pause-icon').className = 'fa-solid fa-play';
+            }
+        }
+
+        function toggleMute() {
+            const video = document.getElementById('real-video-player');
+            video.muted = !video.muted;
+            isMuted = video.muted;
+            document.getElementById('mute-icon').className = isMuted ? 'fa-solid fa-volume-xmark text-rose-400' : 'fa-solid fa-volume-high text-slate-400';
+        }
+
+        function handleSeek(e) {
+            const video = document.getElementById('real-video-player');
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            if (currentUser && currentUser.isPaid) {
+                if (video.duration) video.currentTime = pos * video.duration;
+            } else {
+                video.currentTime = pos * 15;
+            }
+        }
+
+        function closePlayer() {
+            const video = document.getElementById('real-video-player');
+            video.pause();
+            video.currentTime = 0;
+            video.ontimeupdate = null;
+            closeModal('playerModal');
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "00:00";
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        }
+
+        function handleMediaLoadError() {
+            const video = document.getElementById('real-video-player');
+            const item = mediaDatabase.find(m => m.id === activePlayerMediaId);
+            document.getElementById('media-error-message').innerText = `無法載入影音來源。請確認公開網址是否支援跨域播放。\n${item ? item.src : ''}`;
+            document.getElementById('media-error-overlay').classList.remove('hidden');
+        }
+
+        function openActiveSourceDirectly() {
+            const item = mediaDatabase.find(m => m.id === activePlayerMediaId);
+            if (item && item.src) window.open(item.src, '_blank', 'noopener,noreferrer');
+        }
+
+        // --- 個人影音庫與自訂群組系統 (補回與增強) ---
+        function loadPersonalLibrary() {
+            ['saved', 'favorites', 'playlist'].forEach(type => {
+                try {
+                    const value = JSON.parse(localStorage.getItem(COLLECTION_KEYS[type]) || '[]');
+                    personalLibrary[type] = Array.isArray(value) ? value.map(Number).filter(Number.isFinite) : [];
+                } catch (_) { personalLibrary[type] = []; }
+            });
+            autoplayMode = localStorage.getItem(COLLECTION_KEYS.autoplay) || 'off';
+            try { 
+                const groups = JSON.parse(localStorage.getItem(COLLECTION_KEYS.groups) || '[]');
+                playlistGroups = Array.isArray(groups) ? groups : [];
+            } catch (_) { playlistGroups = []; }
+        }
+
+        function savePlaylistGroups() {
+            localStorage.setItem(COLLECTION_KEYS.groups, JSON.stringify(playlistGroups));
+            renderPersonalLibrary();
+        }
+
+        function createPlaylistGroup() {
+            if (checkBotHoneypot()) return;
+            const input = document.getElementById('new-playlist-group-name');
+            const name = (input?.value || '').trim();
+            if (!name) return showToast('請輸入群組名稱。', 'fa-triangle-exclamation text-amber-400');
+            
+            if (playlistGroups.some(g => g.name.toLowerCase() === name.toLowerCase())) {
+                return showToast('已存在相同名稱的群組。', 'fa-circle-exclamation text-amber-400');
+            }
+
+            playlistGroups.push({ id: `g${Date.now()}`, name, items: [] });
+            savePlaylistGroups();
+            if (input) input.value = '';
+            showToast(`已建立播放群組「${name}」！`, 'fa-folder-plus text-cyan-300');
+        }
+
+        function addToPlaylistGroup(mediaId, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (checkBotHoneypot()) return;
+
+            const id = Number(mediaId);
+            const item = mediaDatabase.find(m => Number(m.id) === id);
+            if (!item) return;
+
+            let groupListPrompt = playlistGroups.length > 0 
+                ? `現有群組清單：\n${playlistGroups.map((g, idx) => `${idx + 1}. ${g.name}`).join('\n')}\n\n請輸入欲加入的群組名稱（輸入新名稱將自動建立）：`
+                : '目前尚未建立任何群組。\n請輸入新群組名稱：';
+
+            let targetName = prompt(groupListPrompt, playlistGroups[0]?.name || '');
+            if (targetName === null || !targetName.trim()) return;
+            targetName = targetName.trim();
+
+            let group = playlistGroups.find(g => g.name.toLowerCase() === targetName.toLowerCase());
+            if (!group) {
+                group = { id: `g${Date.now()}`, name: targetName, items: [] };
+                playlistGroups.push(group);
+            }
+
+            if (!group.items.includes(id)) {
+                group.items.push(id);
+                savePlaylistGroups();
+                showToast(`已將「${item.title}」加入「${group.name}」！`, 'fa-folder-plus text-violet-300');
+            } else {
+                showToast(`此影音已在「${group.name}」中。`, 'fa-circle-info text-slate-400');
+            }
+        }
+
+        function removeFromPlaylistGroup(groupId, mediaId) {
+            const group = playlistGroups.find(g => g.id === groupId);
+            if (!group) return;
+            group.items = group.items.filter(id => Number(id) !== Number(mediaId));
+            savePlaylistGroups();
+            showToast('已從群組中移除。', 'fa-trash text-slate-400');
+        }
+
+        function renamePlaylistGroup(groupId) {
+            const group = playlistGroups.find(g => g.id === groupId);
+            if (!group) return;
+            const newName = prompt('請輸入新群組名稱：', group.name);
+            if (newName === null || !newName.trim()) return;
+            group.name = newName.trim();
+            savePlaylistGroups();
+            showToast('群組名稱已更新。', 'fa-pen text-cyan-300');
+        }
+
+        function deletePlaylistGroup(groupId) {
+            const group = playlistGroups.find(g => g.id === groupId);
+            if (!group || !confirm(`確定要刪除「${group.name}」群組？\n（群組內的影音不會被刪除）`)) return;
+            playlistGroups = playlistGroups.filter(g => g.id !== groupId);
+            savePlaylistGroups();
+            showToast('群組已刪除。', 'fa-trash text-rose-400');
+        }
+
+        function toggleCollection(type, mediaId, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (checkBotHoneypot()) return;
+            if (!personalLibrary[type] || !mediaId) return;
+            const id = Number(mediaId);
+            const index = personalLibrary[type].indexOf(id);
+            const added = index === -1;
+            if (added) personalLibrary[type].push(id); else personalLibrary[type].splice(index, 1);
+            localStorage.setItem(COLLECTION_KEYS[type], JSON.stringify(personalLibrary[type]));
+            renderMediaGrid();
+            renderPersonalLibrary();
+            updatePlayerCollectionButtons();
+            showToast(added ? '已加入收藏' : '已從收藏移除');
+        }
+
+        function openLibraryModal() {
+            renderPersonalLibrary();
+            openModal('libraryModal');
+        }
+
+        function renderPersonalLibrary() {
+            const root = document.getElementById('personal-library-content');
+            if (!root) return;
+
+            // 基礎三項分類 (私人收藏、最愛、播放清單)
+            const sections = [
+                ['saved', '私人收藏', 'fa-bookmark', 'text-emerald-300'],
+                ['favorites', '最愛影音', 'fa-heart', 'text-pink-300'],
+                ['playlist', '播放清單', 'fa-list-ul', 'text-brand-300']
+            ];
+            const baseHtml = sections.map(([type, label, icon, color]) => {
+                const items = personalLibrary[type].map(id => mediaDatabase.find(item => item.id === id)).filter(Boolean);
+                const rows = items.length ? items.map(item => `
+                    <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-3">
+                        <img src="${item.thumb}" class="w-20 h-12 rounded-lg object-cover" onerror="this.src='https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop&q=80'">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-bold text-white truncate">${item.title}</div>
+                            <div class="text-[10px] text-slate-500 truncate">${item.creator}</div>
+                        </div>
+                        <button onclick="closeModal('libraryModal'); openPlayer(${item.id})" class="w-8 h-8 rounded-full bg-brand-600 text-white hover:bg-brand-500"><i class="fa-solid fa-play text-xs"></i></button>
+                        <button onclick="toggleCollection('${type}', ${item.id})" class="w-8 h-8 rounded-full bg-slate-800 text-rose-300 hover:bg-slate-700"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>`).join('') : '<div class="text-xs text-slate-500 bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-4">尚未加入影音</div>';
+                return `<section class="space-y-2"><h4 class="font-bold text-white flex items-center gap-2"><i class="fa-solid ${icon} ${color}"></i>${label}</h4><div class="space-y-2">${rows}</div></section>`;
+            }).join('');
+
+            // 自訂群組渲染 (補回功能)
+            const groupsHtml = playlistGroups.map(group => {
+                const items = (group.items || []).map(id => mediaDatabase.find(m => Number(m.id) === Number(id))).filter(Boolean);
+                const rows = items.length ? items.map(item => `
+                    <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-3">
+                        <img src="${item.thumb}" class="w-20 h-12 rounded-lg object-cover" onerror="this.src='https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop&q=80'">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-bold text-white truncate">${item.title}</div>
+                            <div class="text-[10px] text-slate-500 truncate">${item.creator}</div>
+                        </div>
+                        <button onclick="closeModal('libraryModal'); openPlayer(${item.id})" class="w-8 h-8 rounded-full bg-brand-600 text-white hover:bg-brand-500"><i class="fa-solid fa-play text-xs"></i></button>
+                        <button onclick="removeFromPlaylistGroup('${group.id}', ${item.id})" class="w-8 h-8 rounded-full bg-slate-800 text-rose-300 hover:bg-slate-700" title="從群組移除"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>`).join('') : '<div class="text-xs text-slate-500 bg-slate-900/60 border border-dashed border-slate-800 rounded-xl p-4">此群組尚未加入影音</div>';
+                
+                return `
+                    <section class="space-y-2 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/80">
+                        <div class="flex items-center justify-between pb-1">
+                            <h4 class="font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-folder text-cyan-300"></i>
+                                <span>${group.name}</span>
+                                <span class="text-[10px] text-slate-500 font-mono">(${items.length})</span>
+                            </h4>
+                            <div class="flex items-center gap-1">
+                                <button onclick="renamePlaylistGroup('${group.id}')" class="w-7 h-7 rounded-lg bg-slate-800 text-cyan-300 hover:bg-slate-700 text-xs" title="改名"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="deletePlaylistGroup('${group.id}')" class="w-7 h-7 rounded-lg bg-slate-800 text-rose-300 hover:bg-slate-700 text-xs" title="刪除群組"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="space-y-2">${rows}</div>
+                    </section>`;
+            }).join('');
+
+            const customGroupSection = playlistGroups.length > 0 
+                ? `<div class="border-t border-slate-800 pt-5 space-y-4"><h3 class="font-bold text-white flex items-center gap-2"><i class="fa-solid fa-layer-group text-violet-400"></i>自訂播放群組</h3>${groupsHtml}</div>`
+                : '';
+
+            root.innerHTML = baseHtml + customGroupSection;
+        }
+
+        function updatePlayerCollectionButtons() {
+            const map = { saved: 'player-save-button', favorites: 'player-favorite-button', playlist: 'player-playlist-button' };
+            Object.entries(map).forEach(([type, elementId]) => {
+                const button = document.getElementById(elementId);
+                if (button) button.classList.toggle(type === 'favorites' ? 'text-pink-400' : type === 'saved' ? 'text-emerald-300' : 'text-brand-300', personalLibrary[type].includes(Number(activePlayerMediaId)));
+            });
+        }
+
+        function cycleAutoplayMode() {
+            const order = ['off', 'repeat-one', 'playlist'];
+            autoplayMode = order[(order.indexOf(autoplayMode) + 1) % order.length];
+            localStorage.setItem(COLLECTION_KEYS.autoplay, autoplayMode);
+            const button = document.getElementById('autoplay-mode-button');
+            if (button) button.querySelector('span').innerText = autoplayMode === 'off' ? '關閉' : (autoplayMode === 'repeat-one' ? '單片循環' : '清單連播');
+        }
+
+        function handlePlaybackEnded() {
+            if (autoplayMode === 'repeat-one') return startMediaPlayback();
+            if (autoplayMode !== 'playlist' || personalLibrary.playlist.length === 0) return;
+            const validIds = personalLibrary.playlist.filter(id => mediaDatabase.some(item => item.id === id));
+            if (!validIds.length) return;
+            const currentIndex = validIds.indexOf(Number(activePlayerMediaId));
+            openPlayer(validIds[(currentIndex + 1 + validIds.length) % validIds.length]);
+        }
+
+        // --- 通用互動 ---
+        function switchTab(tabName) {
+            const tabs = ['player', 'pricing'];
+            tabs.forEach(t => {
+                const sec = document.getElementById(`tab-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (!sec || !btn) return;
+                if (t === tabName) {
+                    sec.classList.remove('hidden');
+                    btn.classList.add('bg-brand-600', 'text-white', 'shadow');
+                    btn.classList.remove('text-slate-400', 'hover:bg-slate-700/50');
+                } else {
+                    sec.classList.add('hidden');
+                    btn.classList.remove('bg-brand-600', 'text-white', 'shadow');
+                    btn.classList.add('text-slate-400', 'hover:bg-slate-700/50');
+                }
+            });
+            if (tabName === 'pricing') renderHitList();
+        }
+
+        function openModal(modalId) {
+            const el = document.getElementById(modalId);
+            if (el) el.classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            const el = document.getElementById(modalId);
+            if (el) el.classList.add('hidden');
+        }
+
+        function showToast(msg, iconClass = "fa-circle-check text-emerald-400") {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            document.getElementById('toast-message').innerText = msg;
+            document.getElementById('toast-icon').className = `fa-solid ${iconClass} text-lg`;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // --- 安全啟動進入點 ---
+        window.addEventListener('DOMContentLoaded', async () => {
+            setupDownloadProtection();
+            loadPersonalCategories();
+            loadPersonalLibrary();
+
+            try {
+                const response = await fetch(`./media.json?v=${Date.now()}`, { cache: 'no-store' });
+                if (response.ok) {
+                    const catalog = await response.json();
+                    if (Array.isArray(catalog) && catalog.length > 0) {
+                        mediaDatabase = catalog;
+                    }
+                }
+            } catch (err) {
+                console.warn("無法取得遠端 media.json，使用預設資料：", err);
+            }
+
+            renderMediaGrid();
+            updateMediaCounts();
+            if (typeof renderHitList === 'function') renderHitList();
+
+            try {
+                const cachedUser = JSON.parse(localStorage.getItem('streampulse_current_user_v1'));
+                if (cachedUser && cachedUser.email) {
+                    const sub = getStoredSubscription(cachedUser.email);
+                    currentUser = sub ? { ...cachedUser, isPaid: true, plan: sub.plan, expiresAt: sub.expiresAt } : cachedUser;
+                }
+            } catch (_) {}
+            updateUserUI();
+
+            initGoogleAuth();
+
+            const player = document.getElementById('real-video-player');
+            if (player) {
+                player.onended = handlePlaybackEnded;
+                player.onerror = handleMediaLoadError;
+            }
+        });
+    </script>
+</body>
+</html>

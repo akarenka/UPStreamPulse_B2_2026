@@ -44,6 +44,8 @@
     <style>
         body {
             font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
         }
         .glass-card {
             background: rgba(30, 41, 59, 0.75);
@@ -65,9 +67,25 @@
         #tab-btn-dashboard {
             display: none !important;
         }
+        /* 視覺完全隱藏的防機器人蜜罐 */
+        .hp-bot-trap {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 0;
+            width: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+
+    <!-- 全局蜜罐欄位 (Bot 陷阱) -->
+    <div class="hp-bot-trap" aria-hidden="true">
+        <input type="text" id="hp_site_token" name="hp_site_token" tabindex="-1" autocomplete="off">
+    </div>
 
     <!-- Navigation Header -->
     <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
@@ -82,7 +100,7 @@
                 </div>
             </div>
 
-            <!-- Nav Tabs（已清理 404 連結與多餘按鈕） -->
+            <!-- Nav Tabs -->
             <nav aria-label="主要分頁" class="order-3 md:order-none w-full md:w-auto flex items-center gap-1 overflow-x-auto bg-slate-800/60 p-1 rounded-xl border border-slate-700/50 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <button onclick="switchTab('player')" id="tab-btn-player" class="shrink-0 px-3.5 py-1.5 rounded-lg font-semibold transition-all text-white bg-brand-600 shadow">
                     <i class="fa-solid fa-compact-disc mr-1.5"></i><span>影音大廳</span>
@@ -152,7 +170,7 @@
                 <div id="promo-overlay" class="absolute inset-0 bg-slate-950/35"></div>
                 <div class="relative z-10 max-w-3xl space-y-4">
                     <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 border border-brand-500/30 text-brand-300 text-xs font-bold">
-                        <i class="fa-solid fa-cloud-arrow-up text-brand-400"></i> <span>多雲影音 URL 串流</span>
+                        <i class="fa-solid fa-shield-halved text-brand-400"></i> <span>多雲串流 · 原創版權防護</span>
                     </span>
                     <h1 class="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
                         <span id="promo-title">探索獨家影音內容</span><br>
@@ -174,7 +192,7 @@
             <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-white">熱門串流影音庫</h2>
-                    <p class="text-xs text-slate-400">點擊卡片即可播放，免費帳號自動執行 15 秒試看攔截</p>
+                    <p class="text-xs text-slate-400">點擊卡片即可播放，全站已啟用防下載與防盜保護</p>
                     <div class="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
                         <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-200 text-xs font-bold"><i class="fa-solid fa-photo-film"></i>總上傳 Total <strong id="media-total-count" class="text-white">0</strong></span>
                         <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs font-bold"><i class="fa-solid fa-video"></i>影片 Videos <strong id="media-video-count" class="text-white">0</strong></span>
@@ -224,6 +242,8 @@
     <!-- MODAL 1: Google SDK 原生驗證 Modal -->
     <div id="gmailModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
         <div class="glass-card max-w-md w-full rounded-2xl p-6 border border-slate-700 shadow-2xl relative space-y-5">
+            <!-- 彈窗內部的蜜罐 -->
+            <input type="text" id="hp_login_trap" class="hp-bot-trap" tabindex="-1" autocomplete="off">
             <button onclick="closeModal('gmailModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
@@ -293,9 +313,9 @@
                 </button>
             </div>
 
-            <!-- Video Screen -->
-            <div class="relative bg-black aspect-video flex items-center justify-center overflow-hidden">
-                <video id="real-video-player" class="w-full h-full object-contain bg-black" playsinline controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false" draggable="false">
+            <!-- Video Screen（已掛載右鍵下載攔截、拖曳禁止） -->
+            <div class="relative bg-black aspect-video flex items-center justify-center overflow-hidden" oncontextmenu="return false;">
+                <video id="real-video-player" class="w-full h-full object-contain bg-black" playsinline controlsList="nodownload noplaybackrate" disablePictureInPicture oncontextmenu="return false;" draggable="false">
                     <source id="video-source" src="">
                     您的瀏覽器不支援影片播放。
                 </video>
@@ -368,7 +388,8 @@
                         <button id="player-save-button" onclick="toggleCollection('saved', activePlayerMediaId)" class="text-slate-400 hover:text-emerald-300 text-sm" title="私藏"><i class="fa-solid fa-bookmark"></i></button>
                         <button id="player-favorite-button" onclick="toggleCollection('favorites', activePlayerMediaId)" class="text-slate-400 hover:text-pink-400 text-sm" title="設為最愛"><i class="fa-solid fa-heart"></i></button>
                         <button id="player-playlist-button" onclick="toggleCollection('playlist', activePlayerMediaId)" class="text-slate-400 hover:text-brand-300 text-sm" title="加入播放清單"><i class="fa-solid fa-list-ul"></i></button>
-                        <button onclick="shareMedia(activePlayerMediaId, event)" class="text-slate-400 hover:text-cyan-300 text-sm" title="分享影音"><i class="fa-solid fa-share-nodes"></i></button>
+                        <!-- SMS 簡訊分享與一般分享 -->
+                        <button onclick="openShareModal(activePlayerMediaId, event)" class="text-slate-400 hover:text-cyan-300 text-sm" title="分享影音 (支援 SMS 簡訊)"><i class="fa-solid fa-share-nodes"></i></button>
                         <button id="player-autoplay-button" onclick="cycleAutoplayMode()" class="text-slate-400 hover:text-purple-300 text-sm" title="自動回播"><i class="fa-solid fa-repeat"></i></button>
                         <button onclick="toggleMute()" class="text-slate-400 hover:text-white text-sm">
                             <i id="mute-icon" class="fa-solid fa-volume-high"></i>
@@ -418,6 +439,42 @@
         </div>
     </div>
 
+    <!-- MODAL 4: Share to SMS / Clipboard Modal (新增 SMS 簡訊分享) -->
+    <div id="shareModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-card max-w-sm w-full rounded-2xl p-6 border border-slate-700 shadow-2xl relative space-y-4">
+            <button onclick="closeModal('shareModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-share-nodes"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white">分享影音</h3>
+                    <p class="text-[11px] text-slate-400">選擇分享途徑或發送簡訊給朋友</p>
+                </div>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                <div id="share-target-title" class="text-xs font-bold text-white truncate">影音標題</div>
+                <div id="share-target-url" class="text-[10px] text-slate-500 truncate font-mono">https://...</div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2 pt-1">
+                <!-- 發送 SMS 簡訊按鈕 -->
+                <button id="btn-share-sms" onclick="executeSmsShare()" class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md">
+                    <i class="fa-solid fa-comment-sms text-sm"></i>
+                    <span>透過 SMS 簡訊發送連結</span>
+                </button>
+                <!-- 複製連結 -->
+                <button onclick="executeCopyShareLink()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs border border-slate-700 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-copy"></i>
+                    <span>複製分享連結</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Toast -->
     <div id="toast" class="fixed bottom-6 right-6 z-50 glass-card bg-slate-900/90 border border-brand-500/50 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
@@ -431,6 +488,7 @@
         let currentUser = null;
         const SUBSCRIPTION_KEY = 'streampulse_paid_subscription';
         let activePlayerMediaId = null;
+        let pendingShareMedia = null;
         let isPlaying = false;
         let isMuted = false;
         const COLLECTION_KEYS = {
@@ -483,6 +541,118 @@
             }
         ];
 
+        // --- 防機器人蜜罐校驗 (Honeypot Verification) ---
+        function checkBotHoneypot() {
+            const siteToken = document.getElementById('hp_site_token')?.value;
+            const loginTrap = document.getElementById('hp_login_trap')?.value;
+            if ((siteToken && siteToken.trim() !== '') || (loginTrap && loginTrap.trim() !== '')) {
+                console.warn("[Bot Detected] 攔截到自動化機器人填充行為。");
+                return true;
+            }
+            return false;
+        }
+
+        // --- 全局禁止右鍵下載與防盜保護 ---
+        function setupDownloadProtection() {
+            // 1. 禁止在影片、音訊與媒體大廳點選右鍵
+            document.addEventListener('contextmenu', (e) => {
+                if (e.target.closest('video, audio, #real-video-player, #media-grid, #hit-list-grid, #new-list-grid, .glass-card')) {
+                    e.preventDefault();
+                    showToast('原創版權保護中，已禁止右鍵選單與下載。', 'fa-shield-halved text-amber-400');
+                    return false;
+                }
+            });
+
+            // 2. 禁止滑鼠拖曳下載影片元素
+            document.addEventListener('dragstart', (e) => {
+                if (e.target.closest('video, audio, img')) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            // 3. 攔截 Ctrl+S / Cmd+S 存檔
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    showToast('本平台不支援頁面或影音另存新檔。', 'fa-shield-halved text-rose-400');
+                    return false;
+                }
+            });
+
+            // 4. 動態鎖定影片標籤防下載屬性
+            const enforceAttributes = () => {
+                document.querySelectorAll('video, audio').forEach(el => {
+                    el.setAttribute('controlsList', 'nodownload noplaybackrate');
+                    el.setAttribute('disablePictureInPicture', '');
+                    el.setAttribute('draggable', 'false');
+                });
+            };
+            enforceAttributes();
+            new MutationObserver(enforceAttributes).observe(document.body, { childList: true, subtree: true });
+        }
+
+        // --- SMS 簡訊與連結分享系統 ---
+        function openShareModal(mediaId, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (checkBotHoneypot()) return;
+
+            const item = mediaDatabase.find(m => Number(m.id) === Number(mediaId));
+            if (!item) {
+                showToast('找不到欲分享的影音。', 'fa-circle-xmark text-rose-400');
+                return;
+            }
+
+            pendingShareMedia = item;
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', item.src);
+
+            document.getElementById('share-target-title').innerText = item.title;
+            document.getElementById('share-target-url').innerText = shareUrl.href;
+            openModal('shareModal');
+        }
+
+        function executeSmsShare() {
+            if (!pendingShareMedia) return;
+            if (checkBotHoneypot()) return;
+
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', pendingShareMedia.src);
+
+            const textBody = `【StreamPulse 推薦影音】${pendingShareMedia.title}：${shareUrl.href}`;
+            // 相容 iOS 與 Android 的 sms URL Scheme 格式
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const smsDelimiter = isIOS ? '&' : '?';
+            const smsUrl = `sms:${smsDelimiter}body=${encodeURIComponent(textBody)}`;
+
+            window.location.href = smsUrl;
+            showToast('已開啟 SMS 簡訊應用程式。', 'fa-comment-sms text-emerald-400');
+            closeModal('shareModal');
+        }
+
+        async function executeCopyShareLink() {
+            if (!pendingShareMedia) return;
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('media', pendingShareMedia.src);
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(shareUrl.href);
+                } else {
+                    const box = document.createElement('textarea');
+                    box.value = shareUrl.href;
+                    document.body.appendChild(box);
+                    box.select();
+                    document.execCommand('copy');
+                    box.remove();
+                }
+                showToast('分享連結已成功複製到剪貼簿！', 'fa-copy text-cyan-300');
+                closeModal('shareModal');
+            } catch (_) {
+                showToast('複製失敗，請手動選取網址。', 'fa-circle-xmark text-rose-400');
+            }
+        }
+
         // --- Google 原生 SDK 憑證處理 ---
         function decodeJwtResponse(token) {
             try {
@@ -497,7 +667,7 @@
         }
 
         function handleCredentialResponse(response) {
-            if (!response || !response.credential) return;
+            if (!response || !response.credential || checkBotHoneypot()) return;
             const payload = decodeJwtResponse(response.credential);
             if (!payload || !payload.email) return;
 
@@ -551,6 +721,7 @@
         }
 
         function loginMockUser(email, name, picture, isPaid = false) {
+            if (checkBotHoneypot()) return;
             const subscription = getStoredSubscription(email);
             currentUser = subscription
                 ? { email, name, picture, isPaid: true, plan: subscription.plan, expiresAt: subscription.expiresAt }
@@ -564,7 +735,7 @@
             }
         }
 
-        // --- 使用者狀態與介面更新 (修正遺漏的 updateUserUI) ---
+        // --- 使用者狀態與介面更新 ---
         function updateUserUI() {
             const btnLogin = document.getElementById('btn-login-gmail');
             const badge = document.getElementById('user-profile-badge');
@@ -649,6 +820,7 @@
         }
 
         function processSubscription() {
+            if (checkBotHoneypot()) return;
             if (!currentUser) {
                 closeModal('subscriptionModal');
                 openModal('gmailModal');
@@ -769,6 +941,7 @@
                                 <button onclick="toggleCollection('saved', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.saved.includes(item.id) ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="私藏"><i class="fa-solid fa-bookmark"></i></button>
                                 <button onclick="toggleCollection('favorites', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.favorites.includes(item.id) ? 'bg-pink-500/20 border-pink-500/50 text-pink-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="最愛"><i class="fa-solid fa-heart"></i></button>
                                 <button onclick="toggleCollection('playlist', ${item.id}, event)" class="w-8 h-8 rounded-lg border ${personalLibrary.playlist.includes(item.id) ? 'bg-brand-500/20 border-brand-500/50 text-brand-300' : 'bg-slate-900 border-slate-700 text-slate-400'}" title="播放清單"><i class="fa-solid fa-list-ul"></i></button>
+                                <button onclick="openShareModal(${item.id}, event)" class="w-8 h-8 rounded-lg border bg-cyan-500/15 border-cyan-500/40 text-cyan-300" title="分享 (支援 SMS 簡訊)"><i class="fa-solid fa-share-nodes"></i></button>
                             </div>
                         </div>
                     </div>
@@ -821,7 +994,7 @@
             renderMediaGrid();
         }
 
-        // --- Hit List 邏輯 (加強防錯) ---
+        // --- Hit List ---
         function numericViews(value) {
             const text = String(value || '0').trim().toLowerCase().replace(/,/g, '');
             const number = parseFloat(text) || 0;
@@ -1014,6 +1187,7 @@
 
         function toggleCollection(type, mediaId, event) {
             if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (checkBotHoneypot()) return;
             if (!personalLibrary[type] || !mediaId) return;
             const id = Number(mediaId);
             const index = personalLibrary[type].indexOf(id);
@@ -1072,6 +1246,7 @@
         }
 
         function createPlaylistGroup() {
+            if (checkBotHoneypot()) return;
             const input = document.getElementById('new-playlist-group-name');
             const name = (input?.value || '').trim();
             if (!name) return;
@@ -1084,11 +1259,11 @@
 
         function handlePlaybackEnded() {
             if (autoplayMode === 'repeat-one') return startMediaPlayback();
-            if (autoplayMode === 'playlist' && personalLibrary.playlist.length > 0) {
-                const currentIndex = personalLibrary.playlist.indexOf(Number(activePlayerMediaId));
-                const nextId = personalLibrary.playlist[(currentIndex + 1) % personalLibrary.playlist.length];
-                openPlayer(nextId);
-            }
+            if (autoplayMode !== 'playlist' || personalLibrary.playlist.length === 0) return;
+            const validIds = personalLibrary.playlist.filter(id => mediaDatabase.some(item => item.id === id));
+            if (!validIds.length) return;
+            const currentIndex = validIds.indexOf(Number(activePlayerMediaId));
+            openPlayer(validIds[(currentIndex + 1 + validIds.length) % validIds.length]);
         }
 
         // --- 通用互動 ---
@@ -1134,10 +1309,11 @@
 
         // --- 安全啟動進入點 ---
         window.addEventListener('DOMContentLoaded', async () => {
+            setupDownloadProtection();
             loadPersonalCategories();
             loadPersonalLibrary();
 
-            // 1. 嘗試載入伺服器 media.json，失敗時保留預設資料
+            // 1. 嘗試載入伺服器 media.json
             try {
                 const response = await fetch(`./media.json?v=${Date.now()}`, { cache: 'no-store' });
                 if (response.ok) {
@@ -1147,7 +1323,7 @@
                     }
                 }
             } catch (err) {
-                console.warn("無法取得遠端 media.json，使用內建資料庫：", err);
+                console.warn("無法取得遠端 media.json，使用預設資料：", err);
             }
 
             // 2. 渲染 UI
@@ -1155,7 +1331,7 @@
             updateMediaCounts();
             if (typeof renderHitList === 'function') renderHitList();
 
-            // 3. 檢查快取的登入者
+            // 3. 檢查快取登入狀態
             try {
                 const cachedUser = JSON.parse(localStorage.getItem('streampulse_current_user_v1'));
                 if (cachedUser && cachedUser.email) {
